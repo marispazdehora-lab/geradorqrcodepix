@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Gerador Pix + Plaquinha</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #0a3d62, #ff7a00);
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .layout {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .container, .plaque-box {
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      width: 300px;
+      text-align: center;
+    }
+
+    input, button, select {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      background: #ff7a00;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .download {
+      background: #0a3d62;
+    }
+
+    canvas {
+      margin-top: 10px;
+      border-radius: 12px;
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <div class="container">
+    <h3>Gerar Pix</h3>
+
+    <input type="text" id="chave" placeholder="Chave Pix">
+    <input type="number" id="valor" placeholder="Valor (opcional)">
+
+    <button onclick="gerarPix()">Gerar QR Code</button>
+
+    <div id="qrcode"></div>
+  </div>
+
+  <div class="plaque-box">
+    <h2>Faça sua plaquinha</h2>
+
+    <select id="cor">
+      <option value="white">Branca</option>
+      <option value="black">Preta</option>
+    </select>
+
+    <button onclick="gerarPlaca()">Gerar Plaquinha</button>
+
+    <canvas id="placa" width="350" height="500"></canvas>
+
+    <button class="download" onclick="baixar()">Baixar imagem</button>
+  </div>
+
+</div>
+
+<script>
+let ultimoPayload = '';
+let ultimaChave = '';
+
+function gerarPix() {
+  const chave = document.getElementById('chave').value;
+  let valor = document.getElementById('valor').value;
+
+  if (!chave) {
+    alert('Digite uma chave Pix!');
+    return;
+  }
+
+  if (!valor) valor = '';
+  else valor = parseFloat(valor).toFixed(2);
+
+  const payload = montarPayload(chave, valor);
+  ultimoPayload = payload;
+  ultimaChave = chave;
+
+  const qrDiv = document.getElementById('qrcode');
+  qrDiv.innerHTML = '';
+
+  new QRCode(qrDiv, {
+    text: payload,
+    width: 150,
+    height: 150
+  });
+}
+
+function gerarPlaca() {
+  if (!ultimoPayload) {
+    alert('Gere um QR Code primeiro!');
+    return;
+  }
+
+  const canvas = document.getElementById('placa');
+  const ctx = canvas.getContext('2d');
+  const cor = document.getElementById('cor').value;
+
+  const bg = cor === 'black' ? '#111' : '#ffffff';
+  const textColor = cor === 'black' ? '#ffffff' : '#444';
+  const green = '#2e7d32';
+
+  // FUNDO
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // BORDA ESTILO CANVA
+  ctx.strokeStyle = green;
+  ctx.lineWidth = 4;
+  ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+
+  // TÍTULO PIX
+  ctx.fillStyle = green;
+  ctx.font = 'bold 34px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('PIX', canvas.width / 2, 70);
+
+  // TEXTO
+  ctx.fillStyle = textColor;
+  ctx.font = '16px Arial';
+  ctx.fillText('Aponte sua câmera para o QR Code', canvas.width / 2, 110);
+  ctx.fillText('ou use nossa chave:', canvas.width / 2, 135);
+
+  // QR CODE
+  const temp = document.createElement('div');
+  new QRCode(temp, { text: ultimoPayload, width: 200, height: 200 });
+  const img = temp.querySelector('img');
+
+  img.onload = function () {
+    ctx.drawImage(img, (canvas.width - 200) / 2, 160);
+
+    let tipo = '';
+    if (ultimaChave.includes('@')) tipo = 'E-mail';
+    else if (/^\d{11}$/.test(ultimaChave)) tipo = 'CPF';
+    else if (/^\d{10,11}$/.test(ultimaChave)) tipo = 'Telefone';
+    else tipo = 'Chave';
+
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText(tipo + ':', canvas.width / 2, 400);
+
+    ctx.font = '14px Arial';
+    quebrarTexto(ctx, ultimaChave, canvas.width / 2, 430, 280, 18);
+  };
+}
+
+function quebrarTexto(ctx, texto, x, y, maxWidth, lineHeight) {
+  const palavras = texto.split(' ');
+  let linha = '';
+
+  for (let i = 0; i < palavras.length; i++) {
+    const teste = linha + palavras[i] + ' ';
+    const largura = ctx.measureText(teste).width;
+
+    if (largura > maxWidth && i > 0) {
+      ctx.fillText(linha, x, y);
+      linha = palavras[i] + ' ';
+      y += lineHeight;
+    } else {
+      linha = teste;
+    }
+  }
+  ctx.fillText(linha, x, y);
+}
+
+function baixar() {
+  const canvas = document.getElementById('placa');
+  const link = document.createElement('a');
+  link.download = 'placa-pix.png';
+  link.href = canvas.toDataURL();
+  link.click();
+}
+
+function montarPayload(chave, valor) {
+  function format(id, value) {
+    const size = value.length.toString().padStart(2, '0');
+    return id + size + value;
+  }
+
+  let payload = '';
+
+  payload += '000201';
+  payload += format('26', format('00', 'BR.GOV.BCB.PIX') + format('01', chave));
+  payload += '52040000';
+  payload += '5303986';
+
+  if (valor) payload += format('54', valor);
+
+  payload += '5802BR';
+  payload += '5901N';
+  payload += '6001N';
+  payload += '62070503***';
+  payload += '6304';
+
+  payload += crc16(payload);
+  return payload;
+}
+
+function crc16(payload) {
+  let polinomio = 0x1021;
+  let resultado = 0xFFFF;
+
+  for (let i = 0; i < payload.length; i++) {
+    resultado ^= payload.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      if ((resultado <<= 1) & 0x10000) resultado ^= polinomio;
+      resultado &= 0xFFFF;
+    }
+  }
+
+  return resultado.toString(16).toUpperCase().padStart(4, '0');
+}
+</script>
+
+</body>
+</html>
